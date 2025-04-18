@@ -1,0 +1,387 @@
+#include <iostream>
+#include <string>
+#include <fstream>
+
+using namespace std;
+
+class CSTNode
+{
+public:
+    CSTNode *pRight;
+    CSTNode *pLeft;
+    int frequency;
+    unsigned char letter;
+
+    CSTNode()
+    {
+        pRight = NULL;
+        pLeft = NULL;
+        letter = '\0';
+        frequency = 0;
+    }
+};
+
+class CSNode
+{
+public:
+    CSNode *pNext;
+    CSTNode *pDown;
+    int frq;
+    unsigned char ltr;
+
+    CSNode()
+    {
+        pNext = NULL;
+        pDown = NULL;
+        ltr = '\0';
+        frq = 0;
+    }
+};
+
+class CNodeLetters
+{
+public:
+    unsigned char info;
+    unsigned char codes[100];
+    CNodeLetters *pnext;
+
+    CNodeLetters()
+    {
+        pnext = NULL;
+        info = '\0';
+        for (int i = 0; i < 100; i++)
+        {
+            codes[i] = '\0';
+        }
+    }
+};
+
+class CTList
+{
+public:
+    CNodeLetters *pHead;
+    CNodeLetters *pTail;
+
+    CTList()
+    {
+        pHead = NULL;
+        pTail = NULL;
+    }
+    ~CTList()
+    {
+        CNodeLetters *pTrav = pHead;
+        while (pHead != NULL)
+        {
+            pHead = pTrav->pnext;
+            pTrav->pnext = NULL;
+            delete pTrav;
+            pTrav = pHead;
+        }
+    }
+    void Attach(CNodeLetters *pnn)
+    {
+        if (pHead == NULL)
+        {
+            pHead = pnn;
+            pTail = pnn;
+        }
+        else
+        {
+            pTail->pnext = pnn;
+            pTail = pnn;
+        }
+    }
+};
+
+class CSList
+{
+public:
+    CSNode *pHead;
+    CSList()
+    {
+        pHead = NULL;
+    }
+    ~CSList()
+    {
+        CSNode *pTrav = pHead;
+        while (pHead != NULL)
+        {
+            pHead = pTrav->pNext;
+            pTrav->pNext = NULL;
+            delete pTrav;
+            pTrav = pHead;
+        }
+    }
+
+    void Insert(CSNode *pnn)
+    {
+        if (pHead == NULL || pnn->frq < pHead->frq)
+        {
+            pnn->pNext = pHead;
+            pHead = pnn;
+        }
+        else
+        {
+            CSNode *pTrav = pHead;
+            while (pTrav->pNext != NULL && pTrav->pNext->frq < pnn->frq)
+            {
+                pTrav = pTrav->pNext;
+            }
+            pnn->pNext = pTrav->pNext;
+            pTrav->pNext = pnn;
+        }
+    }
+};
+
+void buildHuffman(CSList &L)
+{
+
+    while (L.pHead->pNext != NULL)
+    {
+        CSNode *leastFrq = L.pHead;
+        CSNode *secondLeastFrq = L.pHead->pNext;
+
+        L.pHead = secondLeastFrq->pNext;
+
+        CSTNode *mergedNode = new CSTNode;
+
+        mergedNode->frequency = leastFrq->frq + secondLeastFrq->frq;
+        mergedNode->pRight = leastFrq->pDown;
+        mergedNode->pLeft = secondLeastFrq->pDown;
+
+        CSNode *pnn = new CSNode;
+        pnn->frq = mergedNode->frequency;
+        pnn->pDown = mergedNode;
+        pnn->ltr = 'X';
+        pnn->pNext = NULL;
+
+        L.Insert(pnn);
+    }
+}
+
+void codes(CSTNode *pnn, string code, CTList &ListTwo, ofstream &huffmanFile)
+{
+    if (pnn == NULL)
+    {
+        return;
+    }
+    if (pnn->pLeft == NULL && pnn->pRight == NULL)
+    {
+        CNodeLetters *newNode = new CNodeLetters;
+        newNode->info = pnn->letter;
+
+        for (int i = 0; i < code.length(); i++)
+        {
+            newNode->codes[i] = code[i];
+        }
+        ListTwo.Attach(newNode);
+        huffmanFile << pnn->letter << " -> " << code << "\n";
+    }
+    else
+    {
+        codes(pnn->pLeft, code + "1", ListTwo, huffmanFile);
+        codes(pnn->pRight, code + "0", ListTwo, huffmanFile);
+    }
+}
+
+int compData(CTList &L)
+{
+
+    ifstream inputFile;
+    inputFile.open("in.bmp", ios::binary);
+    ofstream compressedFile;
+    compressedFile.open("compressed.txt", ios::binary);
+
+    inputFile.seekg(0, inputFile.end);
+    int inputFileEnd = inputFile.tellg();
+    inputFile.seekg(0, inputFile.beg);
+
+    string readLines;
+    char byte;
+    char temp = 0;
+    int ct = 0;
+    int numOfBitsCompressed = 0;
+
+    if (inputFile.is_open() && compressedFile.is_open())
+    {
+        for (int i = 0; i < inputFileEnd; i++)
+        {
+            inputFile.read(&byte, 1);
+            unsigned char letter = byte;
+            int found = 0;
+
+            CNodeLetters *pTrav = L.pHead;
+            while (pTrav != NULL)
+            {
+                if (pTrav->info == letter)
+                {
+                    found = 1;
+                    break;
+                }
+                pTrav = pTrav->pnext;
+            }
+
+            if (found)
+            {
+                unsigned char *bcode = pTrav->codes;
+                for (int j = 0; bcode[j] != '\0'; j++)
+                {
+                    if (bcode[j] == '1')
+                    {
+                        temp |= (1 << (7 - ct));
+                    }
+                    ct++;
+                    numOfBitsCompressed++;
+                    if (ct == 8)
+                    {
+                        compressedFile.write(&temp, 1);
+                        temp = 0;
+                        ct = 0;
+                    }
+                }
+            }
+        }
+        if (ct > 0)
+        {
+            compressedFile.write(&temp, 1);
+        }
+
+        inputFile.close();
+        compressedFile.close();
+        return numOfBitsCompressed;
+    }
+    return 0;
+}
+
+void decomp(CTList &L, int numBitsCompressed)
+{
+    ifstream compressedFile("compressed.txt", ifstream::binary);
+    ofstream decompressedFile("outputImage.bmp", ofstream::binary);
+
+    compressedFile.seekg(0, compressedFile.end);
+    int compressedFileEnd = compressedFile.tellg();
+    compressedFile.seekg(0, compressedFile.beg);
+
+    int numBitsDecompressed = 0;
+    CNodeLetters *pnn;
+    string DDCode;
+    char byte;
+    if (compressedFile.is_open() && decompressedFile.is_open())
+    {
+        cout << "\nFiles are ready to be decompressed!";
+
+        for (int i = 0; i < compressedFileEnd; i++)
+        {
+            compressedFile.read(&byte, 1);
+            for (int j = 7; j >= 0; j--)
+            {
+                if ((byte & (1 << j)) > 0)
+                {
+                    DDCode += '1';
+                }
+                else
+                {
+                    DDCode += '0';
+                }
+                numBitsDecompressed++;
+
+                pnn = L.pHead;
+                while (pnn != NULL)
+                {
+                    string DDcompare = "";
+                    int trav = 0;
+                    while (pnn->codes[trav] != '\0')
+                    {
+                        DDcompare += pnn->codes[trav];
+                        trav++;
+                    }
+
+                    if (DDCode == DDcompare)
+                    {
+                        char letter = pnn->info;
+                        decompressedFile.write(&letter, 1);
+                        DDCode = "";
+                        break;
+                    }
+                    pnn = pnn->pnext;
+                }
+
+                if (numBitsCompressed == numBitsDecompressed)
+                {
+                    cout << "\nDecompressed Successfully!";
+                    compressedFile.close();
+                    decompressedFile.close();
+                    return;
+                }
+            }
+        }
+    }
+}
+
+int main()
+{
+    CSList L;
+    CTList LTwo;
+
+    string huffmanCodes = "";
+    string DDCode = "";
+
+    int count[256] = {0};
+
+    ifstream inputFile;
+    string readLines = "";
+    inputFile.open("in.bmp", ios::binary);
+
+    inputFile.seekg(0, inputFile.end);
+    int inputFileEnd = inputFile.tellg();
+    inputFile.seekg(0, inputFile.beg);
+    char byte;
+
+    if (inputFile.is_open())
+    {
+        cout << "Files are Open" << endl;
+
+        for (int i = 0; i < inputFileEnd; i++)
+        {
+            inputFile.read(&byte, 1);
+            unsigned char letter = byte;
+            count[letter]++;
+        }
+
+        for (int i = 0; i < 256; i++)
+        {
+            if (count[i] > 0)
+            {
+                CSNode *pnn = new CSNode;
+                pnn->frq = count[i];
+                pnn->ltr = i;
+
+                CSTNode *pnndown = new CSTNode;
+                pnndown->frequency = count[i];
+                pnndown->letter = i;
+                pnn->pDown = pnndown;
+                L.Insert(pnn);
+            }
+        }
+
+        CSNode *pTrav = L.pHead;
+        while (pTrav != NULL)
+        {
+
+            cout << "(" << pTrav->ltr << " = " << pTrav->frq << ")" << endl;
+            pTrav = pTrav->pNext;
+        }
+        cout << endl;
+        buildHuffman(L);
+        ofstream huffmanFile("huffmanCodes.txt");
+
+        pTrav = L.pHead;
+        cout << "Huffman codes: " << endl;
+        codes(pTrav->pDown, huffmanCodes, LTwo, huffmanFile);
+
+        int numBitsCompressed = compData(LTwo);
+        cout << "Number of bits compressed: " << numBitsCompressed;
+
+        decomp(LTwo, numBitsCompressed);
+    }
+}
